@@ -1,13 +1,8 @@
 import axios, { AxiosError, AxiosResponse } from 'axios';
 import {
   Patient,
-  Appointment,
-  Condition,
-  MedicationRequest,
-  Immunization,
   Bundle,
   PatientSearchParams,
-  AppointmentSearchParams,
   OperationOutcome
 } from '@/types/fhir';
 
@@ -51,7 +46,6 @@ const buildQueryString = (params: Record<string, any>): string => {
   
   // Map our UI params to FHIR search parameters
   if (params.name) {
-    // Use standard equality for name matching for better mock API support
     fhirParams.push(`name=${encodeURIComponent(params.name)}`);
   }
   if (params.birthDate) {
@@ -78,7 +72,6 @@ const buildQueryString = (params: Record<string, any>): string => {
 
 // Patient API functions
 export const patientApi = {
-  // Search patients with optional filters
   search: async (params?: PatientSearchParams): Promise<Bundle<Patient>> => {
     const queryString = params ? buildQueryString(params) : '';
     const url = `/Patient${queryString ? `?${queryString}` : ''}`;
@@ -92,127 +85,8 @@ export const patientApi = {
     const response = await api.get(`/Patient/${id}`);
     return response.data;
   },
-
-  // // Create new patient
-  // create: async (patient: Omit<Patient, 'id'>): Promise<Patient> => {
-  //   const response = await api.post('/Patient', patient);
-  //   return response.data;
-  // },
-
-  // // Update patient
-  // update: async (id: string, patient: Patient): Promise<Patient> => {
-  //   const response = await api.put(`/Patient/${id}`, patient);
-  //   return response.data;
-  // },
-
-  // // Delete patient (soft delete - update active status)
-  // delete: async (id: string): Promise<void> => {
-  //   await api.delete(`/Patient/${id}`);
-  // },
 };
 
-// Appointment API functions
-// export const appointmentApi = {
-//   // Search appointments
-//   search: async (params?: AppointmentSearchParams): Promise<Bundle<Appointment>> => {
-//     const queryString = params ? buildQueryString(params) : '';
-//     const response = await api.get(`/Appointment${queryString ? `?${queryString}` : ''}`);
-//     return response.data;
-//   },
-
-//   // Get appointment by ID
-//   getById: async (id: string): Promise<Appointment> => {
-//     const response = await api.get(`/Appointment/${id}`);
-//     return response.data;
-//   },
-
-//   // Create new appointment
-//   create: async (appointment: Omit<Appointment, 'id'>): Promise<Appointment> => {
-//     const response = await api.post('/Appointment', appointment);
-//     return response.data;
-//   },
-
-//   // Update appointment
-//   update: async (id: string, appointment: Appointment): Promise<Appointment> => {
-//     const response = await api.put(`/Appointment/${id}`, appointment);
-//     return response.data;
-//   },
-
-//   // Cancel appointment
-//   cancel: async (id: string): Promise<Appointment> => {
-//     const appointment = await appointmentApi.getById(id);
-//     const cancelledAppointment = { ...appointment, status: 'cancelled' as const };
-//     return appointmentApi.update(id, cancelledAppointment);
-//   },
-
-//   // Delete appointment
-//   delete: async (id: string): Promise<void> => {
-//     await api.delete(`/Appointment/${id}`);
-//   },
-// };
-
-// Condition API functions
-// export const conditionApi = {
-//   // Get conditions for a patient
-//   getByPatient: async (patientId: string): Promise<Bundle<Condition>> => {
-//     const response = await api.get(`/Condition?subject=Patient/${patientId}`);
-//     return response.data;
-//   },
-
-//   // Create new condition
-//   create: async (condition: Omit<Condition, 'id'>): Promise<Condition> => {
-//     const response = await api.post('/Condition', condition);
-//     return response.data;
-//   },
-
-//   // Update condition
-//   update: async (id: string, condition: Condition): Promise<Condition> => {
-//     const response = await api.put(`/Condition/${id}`, condition);
-//     return response.data;
-//   },
-// };
-
-// Medication Request API functions
-// export const medicationRequestApi = {
-//   // Get medication requests for a patient
-//   getByPatient: async (patientId: string): Promise<Bundle<MedicationRequest>> => {
-//     const response = await api.get(`/MedicationRequest?subject=Patient/${patientId}`);
-//     return response.data;
-//   },
-
-//   // Create new medication request
-//   create: async (medicationRequest: Omit<MedicationRequest, 'id'>): Promise<MedicationRequest> => {
-//     const response = await api.post('/MedicationRequest', medicationRequest);
-//     return response.data;
-//   },
-
-//   // Update medication request
-//   update: async (id: string, medicationRequest: MedicationRequest): Promise<MedicationRequest> => {
-//     const response = await api.put(`/MedicationRequest/${id}`, medicationRequest);
-//     return response.data;
-//   },
-// };
-
-// Immunization API functions
-// export const immunizationApi = {
-//   // Get immunizations for a patient
-//   getByPatient: async (patientId: string): Promise<Bundle<Immunization>> => {
-//     const response = await api.get(`/Immunization?patient=Patient/${patientId}`);
-//     return response.data;
-//   },
-
-//   // Create new immunization
-//   create: async (immunization: Omit<Immunization, 'id'>): Promise<Immunization> => {
-//     const response = await api.post('/Immunization', immunization);
-//     return response.data;
-//   },
-
-//   // Update immunization
-//   update: async (id: string, immunization: Immunization): Promise<Immunization> => {
-//     const response = await api.put(`/Immunization/${id}`, immunization);
-//     return response.data;
-//   },
-// };
 
 // Error handling utility
 export const handleApiError = (error: AxiosError): string => {
