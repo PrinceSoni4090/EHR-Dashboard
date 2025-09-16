@@ -241,7 +241,6 @@ export default function PatientsPage() {
 							  </div>
 							</div>
 
-							}
 							<div className="border-t pt-4">
 							  <div className="text-xs text-gray-500">{getPatientIdentifier(selectedPatient) ? `ID: ${getPatientIdentifier(selectedPatient)}` : ''}</div>
 							  <div className="mt-1 text-xs text-gray-500">
