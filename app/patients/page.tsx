@@ -49,9 +49,13 @@ export default function PatientsPage() {
       );
     }
     if (params.identifier) {
-      results = results.filter(p => 
-        p.identifier?.some(i => i.value?.toLowerCase().includes(params.identifier?.toLowerCase() || ''))
-      );
+      const needle = params.identifier.toLowerCase();
+      results = results.filter(p => {
+        const idMatch = (p.id || '').toLowerCase().includes(needle);
+        const identifiers = p.identifier || [];
+        const identifierMatch = identifiers.some(i => (i.value || '').toLowerCase().includes(needle));
+        return idMatch || identifierMatch;
+      });
     }
     if (params.birthdate) {
       results = results.filter(p => p.birthDate === params.birthdate);

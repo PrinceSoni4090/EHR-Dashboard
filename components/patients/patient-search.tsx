@@ -88,11 +88,20 @@ export default function PatientSearch({
 	};
   
 	const handleQuickSearch = useCallback((value: string) => {
-	  setSearchParams((prev) => ({ 
-		...prev, 
-		name: value.trim() || undefined 
-	  }));
-	}, []);
+		if (!value) {
+		  setSearchParams(prev => ({ ...prev, name: undefined, identifier: undefined }));
+		  return;
+		}
+	
+		const isId = /^(id:|#)|\d/.test(value);
+		const cleanValue = value.replace(/^(id:\s*|#)/, '');
+		
+		setSearchParams(prev => ({
+		  ...prev,
+		  name: isId ? undefined : value,
+		  identifier: isId ? cleanValue : undefined,
+		}));
+	  }, []);
 
 	const handleAdvancedSearch = useCallback(() => {
 		setSearchParams(prev => ({ ...prev }));
@@ -128,7 +137,7 @@ export default function PatientSearch({
 						<Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
 						<Input
 							placeholder="Search by name, ID, or identifier..."
-							value={searchParams.name || ""}
+							value={searchParams.name || searchParams.identifier || ""}
 							onChange={(e) => {
 								const value = e.target.value;
 								handleQuickSearch(value);
@@ -167,36 +176,6 @@ export default function PatientSearch({
 						</div>
 
 						<div className="space-y-2">
-							<Label htmlFor="given-name">Given Name</Label>
-							<Input
-								id="given-name"
-								placeholder="First name"
-								value={searchParams.given || ""}
-								onChange={(e) =>
-									setSearchParams((prev) => ({
-										...prev,
-										given: e.target.value || undefined,
-									}))
-								}
-							/>
-						</div>
-
-						<div className="space-y-2">
-							<Label htmlFor="identifier">Identifier</Label>
-							<Input
-								id="identifier"
-								placeholder="Patient ID, SSN, etc."
-								value={searchParams.identifier || ""}
-								onChange={(e) =>
-									setSearchParams((prev) => ({
-										...prev,
-										identifier: e.target.value || undefined,
-									}))
-								}
-							/>
-						</div>
-
-						<div className="space-y-2">
 							<Label htmlFor="gender">Gender</Label>
 							<Select
 								value={searchParams.gender ?? "all"}
@@ -219,8 +198,6 @@ export default function PatientSearch({
 									<SelectItem value="all">All</SelectItem>
 									<SelectItem value="male">Male</SelectItem>
 									<SelectItem value="female">Female</SelectItem>
-									<SelectItem value="other">Other</SelectItem>
-									<SelectItem value="unknown">Unknown</SelectItem>
 								</SelectContent>
 							</Select>
 						</div>
@@ -238,41 +215,6 @@ export default function PatientSearch({
 									}))
 								}
 							/>
-						</div>
-
-						<div className="space-y-2">
-							<Label htmlFor="active">Status</Label>
-							<Select
-								value={
-									searchParams.active === undefined
-										? "all"
-										: searchParams.active === true
-										? "true"
-										: searchParams.active === false
-										? "false"
-										: "all"
-								}
-								onValueChange={(value) =>
-									setSearchParams((prev) => {
-										const updated = { ...prev };
-										if (value === "all") {
-											delete updated.active;
-										} else {
-											updated.active = value === "true";
-										}
-										return updated;
-									})
-								}
-							>
-								<SelectTrigger>
-									<SelectValue placeholder="Select status" />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="all">All</SelectItem>
-									<SelectItem value="true">Active</SelectItem>
-									<SelectItem value="false">Inactive</SelectItem>
-								</SelectContent>
-							</Select>
 						</div>
 
 						<div className="col-span-full flex space-x-2">
