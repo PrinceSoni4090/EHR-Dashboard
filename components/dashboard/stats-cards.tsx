@@ -1,7 +1,7 @@
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Users, Calendar, Activity, TrendingUp } from 'lucide-react';
+import { Users, Calendar} from 'lucide-react';
 
 interface StatsCardsProps {
   stats?: {
@@ -37,24 +37,10 @@ export default function StatsCards({ stats }: StatsCardsProps) {
       description: '4 upcoming, 19 completed',
       trend: 'up'
     },
-    {
-      title: 'Active Conditions',
-      value: data.activeConditions.toString(),
-      icon: Activity,
-      description: 'Requiring follow-up',
-      trend: 'stable'
-    },
-    {
-      title: 'This Month',
-      value: data.completedAppointments.toString(),
-      icon: TrendingUp,
-      description: 'Completed appointments',
-      trend: 'up'
-    }
   ];
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-2">
       {cards.map((card, index) => (
         <Card key={index} className="hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

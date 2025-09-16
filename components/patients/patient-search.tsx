@@ -27,14 +27,13 @@ export default function PatientSearch({
 	onSearch,
 	loading,
 	onClear,
-	debounceMs = 500, // Fixed: was 40000ms (40 seconds!)
+	debounceMs = 500,
   }: PatientSearchProps) {
 	const [searchParams, setSearchParams] = useState<PatientSearchParams>({});
 	const [showAdvanced, setShowAdvanced] = useState(false);
 	const debounceTimer = useRef<NodeJS.Timeout>();
 	const isInitialMount = useRef(true);
   
-	// Cleanup timer on unmount
 	useEffect(() => {
 	  return () => {
 		if (debounceTimer.current) {
@@ -45,18 +44,15 @@ export default function PatientSearch({
   
 	// Debounced search effect
 	useEffect(() => {
-	  // Skip initial mount to avoid triggering search on component load
 	  if (isInitialMount.current) {
 		isInitialMount.current = false;
 		return;
 	  }
-  
-	  // Clear existing timer
+
 	  if (debounceTimer.current) {
 		clearTimeout(debounceTimer.current);
 	  }
-  
-	  // Set new timer
+ 
 	  debounceTimer.current = setTimeout(() => {
 		const filtered = getFilteredParams(searchParams);
 		const hasFilters = Object.keys(filtered).length > 0;
@@ -237,7 +233,6 @@ export default function PatientSearch({
 					</div>
 				)}
 
-				{/* Active Filters */}
 				{activeFilters.length > 0 && (
 					<div className="flex flex-wrap gap-2 pt-2 border-t">
 						<span className="text-sm text-gray-500">Active filters:</span>
