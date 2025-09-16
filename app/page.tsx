@@ -3,14 +3,19 @@
 import { useState, useEffect } from "react";
 import DashboardLayout from "@/components/dashboard/layout";
 import StatsCards from "@/components/dashboard/stats-cards";
-import RecentActivity from "@/components/dashboard/recent-activity";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar, Users, Plus, Activity } from "lucide-react";
 import Link from "next/link";
+import { patientApi } from "@/lib/api";
+import { Patient } from "@/types/fhir";
+import { format, isToday, parseISO, compareAsc } from "date-fns";
 
 export default function DashboardPage() {
 	const [currentTime, setCurrentTime] = useState(new Date());
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [appointments, setAppointments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
 	useEffect(() => {
 		const timer = setInterval(() => {
@@ -20,29 +25,46 @@ export default function DashboardPage() {
 		return () => clearInterval(timer);
 	}, []);
 
-	const quickActions = [
-		{
-			title: "New Patient",
-			description: "Register a new patient",
-			icon: Users,
-			href: "/patients/new",
-			color: "bg-blue-500 hover:bg-blue-600",
-		},
-		{
-			title: "Schedule Appointment",
-			description: "Book a new appointment",
-			icon: Calendar,
-			href: "/appointments/new",
-			color: "bg-green-500 hover:bg-green-600",
-		},
-		{
-			title: "Add Condition",
-			description: "Record medical condition",
-			icon: Activity,
-			href: "/conditions/new",
-			color: "bg-yellow-500 hover:bg-yellow-600",
-		},
-	];
+  useEffect(() => {
+    const load = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        // Patients via FHIR API
+        const p = await patientApi.search();
+        const pList = p.entry?.map(e => e.resource) || [];
+        setPatients(pList);
+        // Appointments via mock endpoint
+        const res = await fetch('https://fd4c78c2-c031-4081-ae2a-49d2adcda12a.mock.pstmn.io/Appointment');
+        const data = await res.json();
+        const aList = data.entry?.map((e: any) => e.resource) || [];
+        setAppointments(aList);
+      } catch (e: any) {
+        console.error('Dashboard load error:', e);
+        setError(e?.message || 'Failed to load dashboard data');
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
+
+  const getPatientName = (p: Patient) => {
+    const n = p.name?.[0];
+    const given = n?.given?.join(' ') || '';
+    const family = n?.family || '';
+    return `${given} ${family}`.trim() || 'Unknown Patient';
+  };
+
+  const todayCount = appointments.filter(a => a?.start && isToday(parseISO(a.start))).length;
+  const completedCount = appointments.filter(a => a?.status === 'fulfilled').length;
+
+  // Simple previews: latest 5 patients by meta.lastUpdated (fallback to as-is) and upcoming 5 appointments by start
+  const patientsPreview = [...patients].slice(0, 5);
+  const apptPreview = [...appointments]
+    .filter(a => !!a?.start)
+    .sort((a, b) => compareAsc(parseISO(a.start), parseISO(b.start)))
+    .slice(0, 5);
 
 	return (
 		<DashboardLayout>
@@ -64,53 +86,21 @@ export default function DashboardPage() {
 				</div>
 
 				{/* Stats Cards */}
-				<StatsCards />
+				<StatsCards
+				  stats={{
+					  totalPatients: patients.length,
+					  todayAppointments: todayCount,
+					  activeConditions: 0,
+					  completedAppointments: completedCount,
+				  }}
+				/>
 
-				{/* Quick Actions and Recent Activity */}
-				<div className="grid gap-6 lg:grid-cols-3">
-					{/* Quick Actions */}
-					<div className="lg:col-span-1">
-						<Card>
-							<CardHeader>
-								<CardTitle className="text-lg font-semibold">
-									Quick Actions
-								</CardTitle>
-							</CardHeader>
-							<CardContent className="space-y-3">
-								{quickActions.map((action, index) => (
-									<Link key={index} href={action.href}>
-										<Button
-											variant="outline"
-											className="w-full justify-start h-auto p-4 hover:shadow-md transition-shadow"
-										>
-											<div className={`p-2 rounded-lg ${action.color} mr-3`}>
-												<action.icon className="h-4 w-4 text-white" />
-											</div>
-											<div className="text-left">
-												<div className="font-medium">{action.title}</div>
-												<div className="text-xs text-gray-500">
-													{action.description}
-												</div>
-											</div>
-										</Button>
-									</Link>
-								))}
-							</CardContent>
-						</Card>
-					</div>
 
-					{/* Recent Activity */}
-					<div className="lg:col-span-2">
-						<RecentActivity />
-					</div>
-				</div>
 
-				{/* Today's Schedule Preview */}
+				{/* Upcoming Appointments Preview */}
 				<Card>
 					<CardHeader className="flex flex-row items-center justify-between">
-						<CardTitle className="text-lg font-semibold">
-							Today's Appointments
-						</CardTitle>
+						<CardTitle className="text-lg font-semibold">Upcoming Appointments</CardTitle>
 						<Link href="/appointments">
 							<Button variant="outline" size="sm">
 								View All
@@ -119,42 +109,61 @@ export default function DashboardPage() {
 					</CardHeader>
 					<CardContent>
 						<div className="space-y-4">
-							{/* Sample appointments */}
-							{/* <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-200">
-								<div className="flex items-center space-x-3">
-									<div className="text-blue-600 font-mono text-sm">09:00</div>
-									<div>
-										<p className="font-medium">John Smith</p>
-										<p className="text-sm text-gray-600">Annual checkup</p>
+							{!loading && apptPreview.length === 0 && (
+								<p className="text-gray-500 text-sm">No upcoming appointments.</p>
+							)}
+							{apptPreview.map((a, idx) => (
+								<div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
+									<div className="flex items-center space-x-3">
+										<div>
+											<p className="font-medium">{a?.patient?.name || 'Unknown Patient'}</p>
+											<p className="text-xs text-gray-600">{a?.description || 'Appointment'}</p>
+										</div>
+									</div>
+									<div className="text-right">
+										<div className="text-sm text-gray-700 font-medium">
+											{format(parseISO(a.start), 'EEE, MMM d')}
+										</div>
+										<div className="text-xs text-gray-500">
+											{format(parseISO(a.start), 'p')} – {format(parseISO(a.end), 'p')}
+										</div>
 									</div>
 								</div>
-								<div className="text-blue-600 text-sm">Room 101</div>
-							</div> */}
-
-							{/* <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200">
-								<div className="flex items-center space-x-3">
-									<div className="text-green-600 font-mono text-sm">10:30</div>
-									<div>
-										<p className="font-medium">Emily Johnson</p>
-										<p className="text-sm text-gray-600">Follow-up visit</p>
-									</div>
-								</div>
-								<div className="text-green-600 text-sm">Room 102</div>
-							</div> */}
-
-							{/* <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg border border-yellow-200">
-								<div className="flex items-center space-x-3">
-									<div className="text-yellow-600 font-mono text-sm">14:00</div>
-									<div>
-										<p className="font-medium">Michael Davis</p>
-										<p className="text-sm text-gray-600">Consultation</p>
-									</div>
-								</div>
-								<div className="text-yellow-600 text-sm">Room 103</div>
-							</div> */}
+							))}
 						</div>
 					</CardContent>
 				</Card>
+
+				{/* Patients Preview */}
+				<Card>
+					<CardHeader className="flex flex-row items-center justify-between">
+						<CardTitle className="text-lg font-semibold">
+							Recent Patients
+						</CardTitle>
+						<Link href="/patients">
+							<Button variant="outline" size="sm">View All</Button>
+						</Link>
+					</CardHeader>
+					<CardContent>
+						<div className="divide-y">
+							{!loading && patientsPreview.length === 0 && (
+								<p className="text-gray-500 text-sm py-3">No patients found.</p>
+							)}
+							{patientsPreview.map((p, i) => (
+								<div key={i} className="flex items-center justify-between py-3">
+									<div>
+										<p className="font-medium">{getPatientName(p)}</p>
+										<p className="text-xs text-gray-600">{p.gender || 'unknown'} {p.birthDate ? `• ${format(new Date(p.birthDate), 'PPP')}` : ''}</p>
+									</div>
+									<Link href="/patients">
+										<Button variant="ghost" size="sm">Open</Button>
+									</Link>
+								</div>
+							))}
+						</div>
+					</CardContent>
+				</Card>
+
 			</div>
 		</DashboardLayout>
 	);

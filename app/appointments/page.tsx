@@ -1,105 +1,106 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import DashboardLayout from '@/components/dashboard/layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Calendar, User, Stethoscope, Clock } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Calendar, Plus, Clock, User, MapPin, Edit, X } from 'lucide-react';
-import Link from 'next/link';
-import { appointmentApi, handleApiError } from '@/lib/api';
-import { Appointment, AppointmentSearchParams } from '@/types/fhir';
-import { format, isToday, isTomorrow, isYesterday, parseISO } from 'date-fns';
+import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+
+// Types matching the mock API response
+type MockAppointment = {
+  resourceType: 'Appointment';
+  id: string;
+  status: 'booked' | 'cancelled' | 'pending' | 'fulfilled' | 'arrived' | 'noshow' | 'proposed';
+  start: string; // ISO
+  end: string;   // ISO
+  patient: {
+    id: string;
+    name: string;
+    gender?: string;
+    medicalHistory?: string[];
+    allergies?: string[];
+  };
+  provider?: {
+    id: string;
+    name: string;
+    specialty?: string;
+  };
+  description?: string;
+};
+
+type MockBundle = {
+  resourceType: 'Bundle';
+  type: 'searchset' | 'collection';
+  total?: number;
+  entry?: Array<{ resource: MockAppointment }>;
+};
 
 export default function AppointmentsPage() {
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [appointments, setAppointments] = useState<MockAppointment[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedDate, setSelectedDate] = useState<string>(
-    format(new Date(), 'yyyy-MM-dd')
-  );
+  const [nameFilter, setNameFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | MockAppointment['status']>('all');
+  const [is24h, setIs24h] = useState(false);
+  const [selected, setSelected] = useState<MockAppointment | null>(null);
 
-  // Load appointments
+  const formatDateTime = (iso: string) => {
+    const date = parseISO(iso);
+    // Example: Sep 20, 2025 9:00 AM  or  Sep 20, 2025 09:00
+    const timeFmt = is24h ? 'HH:mm' : 'p';
+    return `${format(date, 'PPP')} ${format(date, timeFmt)}`;
+  };
+
+  const formatTimeOnly = (iso: string) => {
+    const date = parseISO(iso);
+    const timeFmt = is24h ? 'HH:mm' : 'h:mm a';
+    return format(date, timeFmt);
+  };
+
+  const filtered = appointments.filter((a) => {
+    const matchName = nameFilter
+      ? (a.patient?.name || '').toLowerCase().includes(nameFilter.toLowerCase())
+      : true;
+    const matchStatus = statusFilter === 'all' ? true : a.status === statusFilter;
+    return matchName && matchStatus;
+  });
+
   useEffect(() => {
-    loadAppointments({ date: selectedDate });
-  }, [selectedDate]);
-
-  const loadAppointments = useCallback(async (params?: AppointmentSearchParams) => {
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await appointmentApi.search(params);
-      setAppointments(response.entry?.map(entry => entry.resource) || []);
-    } catch (err: any) {
-      const errorMessage = handleApiError(err);
-      setError(errorMessage);
-      console.error('Error loading appointments:', err);
-    } finally {
-      setLoading(false);
-    }
+    const load = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const res = await fetch('https://fd4c78c2-c031-4081-ae2a-49d2adcda12a.mock.pstmn.io/Appointment');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data: MockBundle = await res.json();
+        const items = data.entry?.map(e => e.resource) || [];
+        setAppointments(items);
+      } catch (e: any) {
+        console.error('Error loading appointments:', e);
+        setError(e?.message || 'Failed to load appointments');
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
   }, []);
 
-  const handleCancelAppointment = useCallback(async (appointmentId: string) => {
-    if (!confirm('Are you sure you want to cancel this appointment?')) {
-      return;
-    }
-
-    try {
-      await appointmentApi.cancel(appointmentId);
-      // Reload appointments
-      loadAppointments({ date: selectedDate });
-    } catch (err: any) {
-      const errorMessage = handleApiError(err);
-      alert(`Error cancelling appointment: ${errorMessage}`);
-    }
-  }, [selectedDate, loadAppointments]);
-
-  const getStatusBadge = (status: Appointment['status']) => {
-    const statusConfig = {
-      proposed: { label: 'Proposed', variant: 'secondary' as const },
-      pending: { label: 'Pending', variant: 'secondary' as const },
-      booked: { label: 'Booked', variant: 'default' as const },
-      arrived: { label: 'Arrived', variant: 'default' as const },
-      fulfilled: { label: 'Completed', variant: 'default' as const },
-      cancelled: { label: 'Cancelled', variant: 'destructive' as const },
-      noshow: { label: 'No Show', variant: 'destructive' as const }
+  const renderStatusBadge = (status: MockAppointment['status']) => {
+    const map: Record<MockAppointment['status'], { label: string; className: string }> = {
+      booked:   { label: 'Booked',   className: 'bg-green-100 text-green-800 border-green-200' },
+      cancelled:{ label: 'Cancelled',className: 'bg-gray-100 text-gray-800 border-gray-200' },
+      pending:  { label: 'Pending',  className: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
+      fulfilled:{ label: 'Completed',className: 'bg-blue-100 text-blue-800 border-blue-200' },
+      arrived:  { label: 'Arrived',  className: 'bg-blue-100 text-blue-800 border-blue-200' },
+      noshow:   { label: 'No Show',  className: 'bg-red-100 text-red-800 border-red-200' },
+      proposed: { label: 'Proposed', className: 'bg-purple-100 text-purple-800 border-purple-200' },
     };
-
-    const config = statusConfig[status];
-    return (
-      <Badge variant={config.variant}>
-        {config.label}
-      </Badge>
-    );
+    const cfg = map[status] || map['pending'];
+    return <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium ${cfg.className}`}>{cfg.label}</span>;
   };
-
-  const getAppointmentTime = (start: string, end: string) => {
-    const startTime = format(parseISO(start), 'h:mm a');
-    const endTime = format(parseISO(end), 'h:mm a');
-    return `${startTime} - ${endTime}`;
-  };
-
-  const getRelativeDate = (dateString: string) => {
-    const date = parseISO(dateString);
-    if (isToday(date)) return 'Today';
-    if (isTomorrow(date)) return 'Tomorrow';
-    if (isYesterday(date)) return 'Yesterday';
-    return format(date, 'MMM dd, yyyy');
-  };
-
-  const getPatientName = (appointment: Appointment) => {
-    const patient = appointment.participant?.find(p => 
-      p.type?.some(t => t.coding?.some(c => c.code === 'PART'))
-    );
-    return patient?.actor?.display || 'Unknown Patient';
-  };
-
-  const groupedAppointments = appointments.reduce((groups, appointment) => {
-    const date = format(parseISO(appointment.start), 'yyyy-MM-dd');
-    if (!groups[date]) groups[date] = [];
-    groups[date].push(appointment);
-    return groups;
-  }, {} as Record<string, Appointment[]>);
 
   return (
     <DashboardLayout>
@@ -108,43 +109,39 @@ export default function AppointmentsPage() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Appointments</h1>
-            <p className="text-gray-600">
-              Manage patient appointments and scheduling
-            </p>
+            <p className="text-gray-600">View upcoming and recent appointments</p>
           </div>
-          <Link href="/appointments/new">
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              New Appointment
-            </Button>
-          </Link>
         </div>
 
-        {/* Date Filter */}
+        {/* Filters */}
         <Card>
           <CardContent className="pt-6">
-            <div className="flex items-center space-x-4">
-              <Calendar className="h-5 w-5 text-gray-400" />
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-              <div className="flex space-x-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSelectedDate(format(new Date(), 'yyyy-MM-dd'))}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Patient name</label>
+                <Input
+                  placeholder="Search by patient name..."
+                  value={nameFilter}
+                  onChange={(e) => setNameFilter(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Status</label>
+                <select
+                  className="w-full border rounded-md px-3 py-2 text-sm"
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value as any)}
                 >
-                  Today
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSelectedDate(format(new Date(Date.now() + 86400000), 'yyyy-MM-dd'))}
-                >
-                  Tomorrow
+                  <option value="all">All</option>
+                  <option value="booked">Booked</option>
+                  <option value="cancelled">Cancelled</option>
+                  <option value="pending">Pending</option>
+                  <option value="fulfilled">Completed</option>
+                </select>
+              </div>
+              <div className="flex items-end">
+                <Button variant="outline" onClick={() => setIs24h((v) => !v)} className="w-full">
+                  Time: {is24h ? '24h' : '12h'}
                 </Button>
               </div>
             </div>
@@ -158,9 +155,6 @@ export default function AppointmentsPage() {
               <p className="text-red-600">
                 Error loading appointments: {error}
               </p>
-              <p className="text-sm text-red-500 mt-1">
-                Showing demo data for now.
-              </p>
             </CardContent>
           </Card>
         )}
@@ -169,111 +163,82 @@ export default function AppointmentsPage() {
         {loading ? (
           <Card>
             <CardContent className="pt-6">
-              <div className="flex items-center justify-center py-8">
-                <div className="text-gray-500">Loading appointments...</div>
+              <div className="flex items-center justify-center py-8 text-gray-500">
+                Loading appointments...
               </div>
             </CardContent>
           </Card>
-        ) : Object.keys(groupedAppointments).length === 0 ? (
+        ) : filtered.length === 0 ? (
           <Card>
             <CardContent className="pt-6">
               <div className="text-center py-8 text-gray-500">
-                No appointments found for the selected date.
+                No appointments found.
               </div>
             </CardContent>
           </Card>
         ) : (
-          Object.entries(groupedAppointments)
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([date, dayAppointments]) => (
-              <Card key={date}>
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-center space-x-2">
-                    <Calendar className="h-5 w-5" />
-                    <span>{getRelativeDate(dayAppointments[0].start)}</span>
-                    <span className="text-sm font-normal text-gray-500">
-                      ({dayAppointments.length} appointment{dayAppointments.length !== 1 ? 's' : ''})
-                    </span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {dayAppointments
-                    .sort((a, b) => a.start.localeCompare(b.start))
-                    .map((appointment) => (
-                      <div
-                        key={appointment.id}
-                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors"
-                      >
-                        <div className="flex items-center space-x-4">
-                          <div className="text-center">
-                            <div className="text-sm font-mono text-gray-900">
-                              {format(parseISO(appointment.start), 'h:mm')}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              {format(parseISO(appointment.start), 'a')}
-                            </div>
-                          </div>
-
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center space-x-2 mb-1">
-                              <h3 className="font-semibold text-gray-900">
-                                {getPatientName(appointment)}
-                              </h3>
-                              {getStatusBadge(appointment.status)}
-                            </div>
-
-                            <div className="space-y-1 text-sm text-gray-600">
-                              {appointment.serviceType?.[0]?.coding?.[0]?.display && (
-                                <p>{appointment.serviceType[0].coding[0].display}</p>
-                              )}
-                              
-                              {appointment.description && (
-                                <p>{appointment.description}</p>
-                              )}
-
-                              <div className="flex items-center space-x-4 text-xs text-gray-500">
-                                <div className="flex items-center space-x-1">
-                                  <Clock className="h-3 w-3" />
-                                  <span>
-                                    Duration: {appointment.minutesDuration || 30} min
-                                  </span>
-                                </div>
-                                
-                                <div className="flex items-center space-x-1">
-                                  <MapPin className="h-3 w-3" />
-                                  <span>Room 101</span>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center space-x-2">
-                          <Link href={`/appointments/${appointment.id}/edit`}>
-                            <Button variant="outline" size="sm">
-                              <Edit className="h-4 w-4 mr-1" />
-                              Edit
-                            </Button>
-                          </Link>
-                          
-                          {appointment.status !== 'cancelled' && appointment.status !== 'fulfilled' && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleCancelAppointment(appointment.id!)}
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                            >
-                              <X className="h-4 w-4 mr-1" />
-                              Cancel
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filtered.map((appt) => (
+              <Card key={appt.id} className="overflow-hidden">
+                <CardContent className="p-4 space-y-3">
+                  <div className="flex items-center text-sm text-gray-800 font-medium">
+                    <User className="h-4 w-4 mr-2" />
+                    <span>{appt.patient?.name || 'Unknown Patient'}</span>
+                  </div>
+                  <div className="flex items-center text-sm text-gray-700">
+                    <Calendar className="h-4 w-4 mr-2" />
+                    <span>{format(parseISO(appt.start), 'PPP')}</span>
+                  </div>
+                  <div className="flex items-center text-xs text-gray-600">
+                    <Clock className="h-3.5 w-3.5 mr-2" />
+                    <span>{formatTimeOnly(appt.start)} — {formatTimeOnly(appt.end)}</span>
+                  </div>
+                  <div className="flex justify-end pt-2">
+                    <Button variant="outline" size="sm" onClick={() => setSelected(appt)}>View</Button>
+                  </div>
                 </CardContent>
               </Card>
-            ))
+            ))}
+          </div>
         )}
+
+        {/* Details Modal */}
+        <Dialog open={!!selected} onOpenChange={(open) => { if (!open) setSelected(null); }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Appointment #{selected?.id}</DialogTitle>
+            </DialogHeader>
+            {selected && (
+              <div className="space-y-4">
+                <div className="text-sm text-gray-700">
+                  <div><span className="font-semibold">Status:</span> {selected.status}</div>
+                  <div><span className="font-semibold">When:</span> {formatDateTime(selected.start)} — {formatDateTime(selected.end)}</div>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-sm font-medium">Patient</div>
+                  <div className="text-sm text-gray-800">{selected.patient?.name}{selected.patient?.gender ? ` • ${selected.patient.gender}` : ''}</div>
+                  <div className="text-xs text-gray-600"><span className="font-semibold">Medical History:</span> {selected.patient?.medicalHistory?.length ? selected.patient.medicalHistory.join(', ') : 'N/A'}</div>
+                  <div className="text-xs text-gray-600"><span className="font-semibold">Allergies:</span> {selected.patient?.allergies?.length ? selected.patient.allergies.join(', ') : 'N/A'}</div>
+                </div>
+                {selected.provider && (
+                  <div className="space-y-1">
+                    <div className="text-sm font-medium">Provider</div>
+                    <div className="text-sm text-gray-800">{selected.provider.name}{selected.provider.specialty ? ` — ${selected.provider.specialty}` : ''}</div>
+                  </div>
+                )}
+                {selected.description && (
+                  <div className="text-sm text-gray-700">
+                    <div className="text-sm font-medium">Description</div>
+                    <div>{selected.description}</div>
+                  </div>
+                )}
+            </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setSelected(null)}>Close</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );
