@@ -7,6 +7,9 @@ export interface Patient {
     use?: string;
     value: string;
     system?: string;
+    type?: {
+      text?: string;
+    };
   }>;
   active?: boolean;
   name: Array<{
@@ -62,6 +65,9 @@ export interface Patient {
     lastUpdated?: string;
     versionId?: string;
   };
+  // Custom fields from API extension
+  medicalHistory?: string[];
+  allergies?: string[];
 }
 
 export interface Appointment {

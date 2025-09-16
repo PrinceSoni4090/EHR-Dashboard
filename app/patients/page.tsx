@@ -12,12 +12,14 @@ import Link from "next/link";
 import { patientApi, handleApiError } from "@/lib/api";
 import { Patient, PatientSearchParams } from "@/types/fhir";
 import { format } from "date-fns";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export default function PatientsPage() {
   const [allPatients, setAllPatients] = useState<Patient[]>([]);
 	const [filteredPatients, setFilteredPatients] = useState<Patient[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
+  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
 
 	useEffect(() => {
 		const fetchAllPatients = async () => {
@@ -70,6 +72,7 @@ export default function PatientsPage() {
 
   const handleClear = useCallback(() => {
     setFilteredPatients(allPatients);
+    setSelectedPatient(null);
   }, [allPatients]);
 
 	const getPatientName = (patient: Patient): string => {
@@ -111,7 +114,7 @@ export default function PatientsPage() {
     return preferred.value;
   };
 
-	return (
+  return (
 		<DashboardLayout>
 		  <div className="space-y-6">
 			{/* Header */}
@@ -129,10 +132,10 @@ export default function PatientsPage() {
 				</Button>
 			  </Link>
 			</div>
-	  
+		  
 			{/* Search */}
 			<PatientSearch onSearch={handleSearch} onClear={handleClear} loading={loading} debounceMs={800} />
-	  
+		  
 			{/* Error State */}
 			{error && (
 			  <Card className="border-red-200 bg-red-50">
@@ -144,7 +147,7 @@ export default function PatientsPage() {
 				</CardContent>
 			  </Card>
 			)}
-	  
+		  
 			{/* Results */}
 			<Card>
 			  <CardHeader>
@@ -159,68 +162,115 @@ export default function PatientsPage() {
 				  </div>
 				)}
 				{!loading && !error && filteredPatients.length > 0 && (
-				  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-					{filteredPatients.map((patient) => (
-					  <Card key={patient.id} className="overflow-hidden">
-						<CardHeader className="bg-gray-50 p-4 border-b">
-						  <div className="flex items-center space-x-4">
-							<Avatar>
-							  <AvatarFallback>
-								{getPatientName(patient).charAt(0)}
-							  </AvatarFallback>
-							</Avatar>
+				  <>
+					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+						{filteredPatients.map((patient) => (
+						  <Card key={patient.id} className="overflow-hidden">
+							<CardHeader className="bg-gray-50 p-4 border-b">
+							  <div className="flex items-center space-x-4">
+								<Avatar>
+								  <AvatarFallback>
+									{getPatientName(patient).charAt(0)}
+								  </AvatarFallback>
+								</Avatar>
+								<div>
+								  <CardTitle className="text-base font-semibold">
+									{getPatientName(patient)}
+								  </CardTitle>
+								  {getPatientIdentifier(patient) && (
+									<div className="text-xs text-gray-600 mt-0.5">
+									  ID: <span className="font-medium">{getPatientIdentifier(patient)}</span>
+									</div>
+								  )}
+								</div>
+							  </div>
+							</CardHeader>
+							<CardContent className="p-4">
+							  <div className="flex justify-end space-x-2">
+								<Button variant="outline" size="sm" onClick={() => setSelectedPatient(patient)}>
+								  <Eye className="h-4 w-4 mr-1" />
+								  Medical Details
+								</Button>
+								<Button variant="secondary" size="sm">
+								  <Edit className="h-4 w-4 mr-1" />
+								  Edit
+								</Button>
+							  </div>
+							</CardContent>
+						  </Card>
+						))}
+  					</div>
+
+					{/* Details Modal */}
+					<Dialog open={!!selectedPatient} onOpenChange={(open) => { if (!open) setSelectedPatient(null); }}>
+					  <DialogContent>
+						<DialogHeader>
+						  <DialogTitle>
+							{selectedPatient ? `Details for ${getPatientName(selectedPatient)}` : 'Details'}
+						  </DialogTitle>
+						</DialogHeader>
+  						{selectedPatient && (
+						  <div className="space-y-6">
+							{/* Primary content at top center */}
 							<div>
-							  <CardTitle className="text-base font-semibold">
-								{getPatientName(patient)}
-							  </CardTitle>
-							  {/* Show external identifier (e.g., MRN) when available */}
-							  {getPatientIdentifier(patient) && (
-                                <div className="text-xs text-gray-600 mt-0.5">
-                                  ID: <span className="font-medium">{getPatientIdentifier(patient)}</span>
-                                </div>
-                              )}
-							  <div className="text-sm text-gray-500">
-								<Badge variant={patient.active ? "default" : "secondary"}>
-								  {patient.active ? "Active" : "Inactive"}
-								</Badge>
-								<span className="mx-1">•</span>
-								<span>
-								  {patient.gender} • Born{" "}
-								  {patient.birthDate
-									? format(new Date(patient.birthDate), "PPP")
-									: "N/A"}
-								</span>
+							  <div className="text-xl sm:text-xl font-semibold">Medical History</div>
+							  <div className="mt-2 text-sm sm:text-base text-gray-700">
+								{selectedPatient.medicalHistory && selectedPatient.medicalHistory.length > 0 ? (
+								  <ul className="list-disc list-inside inline-block text-left">
+									{selectedPatient.medicalHistory.map((mh, idx) => (
+									  <li key={idx}>{mh}</li>
+									))}
+								  </ul>
+								) : (
+								  <span className="text-gray-500">No medical history on file</span>
+								)}
+							  </div>
+							</div>
+							<div>
+							  <div className="text-xl sm:text-xl font-semibold">Allergies</div>
+							  <div className="mt-2 text-sm sm:text-base text-gray-700">
+								{selectedPatient.allergies && selectedPatient.allergies.length > 0 ? (
+								  <ul className="list-disc list-inside inline-block text-left">
+									{selectedPatient.allergies.map((a, idx) => (
+									  <li key={idx}>{a}</li>
+									))}
+								  </ul>
+								) : (
+								  <span className="text-gray-500">No allergies recorded</span>
+								)}
+							  </div>
+							</div>
+
+							}
+							<div className="border-t pt-4">
+							  <div className="text-xs text-gray-500">{getPatientIdentifier(selectedPatient) ? `ID: ${getPatientIdentifier(selectedPatient)}` : ''}</div>
+							  <div className="mt-1 text-xs text-gray-500">
+								{selectedPatient.gender ? `Gender: ${selectedPatient.gender}` : ''}
+								{selectedPatient.birthDate ? `  •  Dob: ${format(new Date(selectedPatient.birthDate), 'PPP')}` : ''}
+							  </div>
+							  <div className="mt-2 space-y-2 text-xs text-gray-600">
+								<div className="flex items-center">
+								  <Phone className="h-3.5 w-3.5 mr-2" />
+								  <span>{getPatientContact(selectedPatient).phone || "No phone"}</span>
+								</div>
+								<div className="flex items-center">
+								  <Mail className="h-3.5 w-3.5 mr-2" />
+								  <span>{getPatientContact(selectedPatient).email || "No email"}</span>
+								</div>
+								<div className="flex items-start">
+								  <MapPin className="h-3.5 w-3.5 mr-2 mt-0.5" />
+								  <span>{getPatientAddress(selectedPatient)}</span>
+								</div>
 							  </div>
 							</div>
 						  </div>
-						</CardHeader>
-						<CardContent className="p-4 space-y-3">
-						  <div className="flex items-center text-sm text-gray-600">
-							<Phone className="h-4 w-4 mr-2 flex-shrink-0" />
-							<span>{getPatientContact(patient).phone || "No phone"}</span>
-						  </div>
-						  <div className="flex items-center text-sm text-gray-600">
-							<Mail className="h-4 w-4 mr-2 flex-shrink-0" />
-							<span>{getPatientContact(patient).email || "No email"}</span>
-						  </div>
-						  <div className="flex items-start text-sm text-gray-600">
-							<MapPin className="h-4 w-4 mr-2 flex-shrink-0 mt-0.5" />
-							<span>{getPatientAddress(patient)}</span>
-						  </div>
-						  <div className="flex justify-end space-x-2 pt-2">
-							<Button variant="outline" size="sm">
-							  <Eye className="h-4 w-4 mr-1" />
-							  View
-							</Button>
-							<Button variant="secondary" size="sm">
-							  <Edit className="h-4 w-4 mr-1" />
-							  Edit
-							</Button>
-						  </div>
-						</CardContent>
-					  </Card>
-					))}
-				  </div>
+						)}
+						<DialogFooter>
+						  <Button variant="outline" size="sm" onClick={() => setSelectedPatient(null)}>Close</Button>
+						</DialogFooter>
+					  </DialogContent>
+					</Dialog>
+				  </>
 				)}
 				{!loading && !error && filteredPatients.length === 0 && (
 				  <div className="text-center py-10">
