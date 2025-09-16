@@ -20,7 +20,8 @@ export default function StatsCards({ stats }: StatsCardsProps) {
     completedAppointments: 156
   };
 
-  const data = stats || defaultStats;
+  // Merge provided stats with defaults to guarantee defined values
+  const data = { ...defaultStats, ...(stats || {}) };
 
   const cards = [
     {
