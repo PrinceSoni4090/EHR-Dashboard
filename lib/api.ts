@@ -3,7 +3,6 @@ import {
   Patient,
   Bundle,
   PatientSearchParams,
-  OperationOutcome
 } from '@/types/fhir';
 
 const api = axios.create({
@@ -29,11 +28,12 @@ api.interceptors.response.use(
     return response;
   },
   (error: AxiosError) => {
-    if (error.response?.status === 429) {
+    const status = error.response?.status;
+    if (status === 429) {
       console.error('Rate limit exceeded. Please try again later.');
-    } else if (error.response?.status === 404) {
+    } else if (status === 404) {
       console.error('Resource not found.');
-    } else if (error.response?.status >= 500) {
+    } else if ((status ?? 0) >= 500) {
       console.error('Server error. Please try again.');
     }
     return Promise.reject(error);
@@ -90,14 +90,13 @@ export const patientApi = {
 
 // Error handling utility
 export const handleApiError = (error: AxiosError): string => {
-  if (error.response?.data) {
-    const outcome = error.response.data as OperationOutcome;
-    if (outcome.resourceType === 'OperationOutcome' && outcome.issue?.[0]) {
-      return outcome.issue[0].details?.text || outcome.issue[0].diagnostics || 'An error occurred';
-    }
+  const data: any = error.response?.data;
+  if (data?.resourceType === 'OperationOutcome' && Array.isArray(data.issue) && data.issue[0]) {
+    return data.issue[0].details?.text || data.issue[0].diagnostics || 'An error occurred';
   }
-  
-  switch (error.response?.status) {
+
+  const status = error.response?.status;
+  switch (status) {
     case 400:
       return 'Invalid request. Please check your input.';
     case 401:
